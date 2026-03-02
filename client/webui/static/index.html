@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sliver Command Center</title>
+  <style>
+    :root {
+      --bg: #090d1a;
+      --panel: #111a33;
+      --panel-2: #0f1630;
+      --line: #253966;
+      --text: #eaf1ff;
+      --muted: #9db6e6;
+      --accent: #4f8cff;
+      --ok: #27c281;
+      --warn: #f7b955;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color: var(--text);
+      background: radial-gradient(1200px 600px at 15% -10%, #1a2952 0%, transparent 45%), var(--bg);
+    }
+    .layout { display:grid; grid-template-columns: 290px 1fr; min-height:100vh; }
+    .nav {
+      background: linear-gradient(180deg, #0f1731 0%, #0c1328 100%);
+      border-right: 1px solid var(--line);
+      padding: 16px;
+    }
+    .brand { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+    .logo {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, #4f8cff 0%, #7ca8ff 100%);
+      box-shadow: 0 0 0 3px rgba(79,140,255,.2);
+    }
+    .title { font-weight: 700; }
+    .subtitle { font-size: 12px; color: var(--muted); }
+    .search { width:100%; margin:10px 0 6px; }
+    .group-title { color:#86a9e9; margin:14px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.1em; }
+    button, input, select, textarea {
+      border: 1px solid #304c85;
+      background: #132043;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 10px;
+    }
+    button { cursor: pointer; transition: .15s ease; }
+    button:hover { border-color: #5f8ff2; transform: translateY(-1px); }
+    .nav button { width:100%; text-align:left; margin: 4px 0; }
+
+    .main { display:grid; grid-template-rows:auto auto 1fr 240px; }
+    .topbar {
+      border-bottom:1px solid var(--line);
+      padding: 12px 14px;
+      display:flex; align-items:center; gap:10px;
+      background: rgba(8,13,27,.55); backdrop-filter: blur(4px);
+    }
+    .pill {
+      padding: 4px 10px; border-radius: 100px; font-size: 12px;
+      border: 1px solid #2d467c; color: #bdd1fb; background: #122245;
+    }
+    .status { font-size: 12px; color: var(--muted); margin-left:auto; }
+
+    .cards { display:grid; grid-template-columns:repeat(8,minmax(100px,1fr)); gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); }
+    .card { background: linear-gradient(180deg, #121d3c 0%, #101a36 100%); border:1px solid #2a3f72; border-radius:12px; padding:10px; }
+    .card .k { color: var(--muted); font-size: 12px; }
+    .card .n { font-size: 30px; font-weight: 700; line-height: 1.1; margin-top: 4px; }
+
+    .workspace { display:grid; grid-template-columns:1.25fr 1fr; gap:12px; padding:14px; overflow:auto; }
+    .panel { background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
+    .h { margin: 0 0 10px; font-size: 15px; }
+    .sub { font-size:12px; color: var(--muted); margin: -5px 0 10px; }
+
+    .actions-filter { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+    .tab-btn { padding:6px 10px; border-radius:999px; font-size:12px; }
+    .tab-btn.active { background:#1a305d; border-color:#5f8ff2; color:#dbe7ff; }
+
+    .actions { display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:10px; }
+    .action-card { background: var(--panel-2); border:1px solid #2d4a84; border-radius:12px; padding:10px; }
+    .action-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .badge { font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid #325698; color:#b7ccfa; }
+    .form { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+    .action-card .run { width:100%; margin-top:8px; font-weight:600; }
+
+    .rpc-box textarea { width:100%; height:200px; }
+    .method-list { max-height: 260px; overflow:auto; border:1px solid #2b4478; border-radius:10px; padding:6px; background:#0f1833; }
+    .method { font-size: 12px; padding:7px; border-radius:8px; cursor:pointer; }
+    .method:hover, .method.active { background:#1b2f5b; }
+
+    .output { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; max-height: 560px; overflow:auto; white-space: pre-wrap; margin: 0; }
+
+    .events { border-top:1px solid var(--line); padding:12px 14px; overflow:auto; background: #0b1328; }
+
+    .muted { color: var(--muted); }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="nav">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <div class="title">Sliver Command Center</div>
+        <div class="subtitle">Commercial Demo UI</div>
+      </div>
+    </div>
+
+    <input id="search" class="search" placeholder="Buscar RPC o categoría" />
+
+    <div class="group-title">Operator</div>
+    <button data-action="sessions.list">Sessions</button>
+    <button data-action="beacons.list">Beacons</button>
+    <button data-action="jobs.list">Jobs</button>
+    <button data-action="pivot.graph">Pivot Graph</button>
+
+    <div class="group-title">Data</div>
+    <button data-action="loot.list">Loot</button>
+    <button data-action="creds.list">Credentials</button>
+    <button data-action="websites.list">Websites</button>
+
+    <div class="group-title">Extensibility</div>
+    <button data-action="builders.list">Builders</button>
+    <button data-action="extensions.list">Extensions</button>
+
+    <div class="group-title">RPC Catalog</div>
+    <div id="catalog" class="method-list"></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <strong id="selected">Selecciona un playbook o RPC</strong>
+      <span class="pill">Realtime events</span>
+      <span class="pill">RPC explorer</span>
+      <button id="invoke">Invoke RPC</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+
+    <div id="cards" class="cards"></div>
+
+    <section class="panel" style="margin:12px 14px 0;">
+      <h3 class="h">Beacon Map</h3>
+      <div class="sub">Mapa interactivo de beacons (estilo grafo). Click en un beacon para abrir menú.</div>
+      <div style="display:grid; grid-template-columns: 1fr 280px; gap:10px;">
+        <svg id="beaconMap" viewBox="0 0 760 360" style="width:100%; height:360px; background:#0b142c; border:1px solid #2a4378; border-radius:10px;"></svg>
+        <div class="panel" style="padding:8px;">
+          <strong id="beaconTitle">Beacon Menu</strong>
+          <div id="beaconMeta" class="sub">Selecciona un nodo del mapa.</div>
+          <div id="beaconMenu"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="workspace">
+      <section class="panel">
+        <h3 class="h">Guided Playbooks</h3>
+        <div class="sub">Organizados por dominio para demos comerciales y operación rápida.</div>
+        <div id="filters" class="actions-filter"></div>
+        <div id="actions" class="actions"></div>
+
+        <div class="rpc-box" style="margin-top:14px;">
+          <h3 class="h">Generic RPC Request</h3>
+          <textarea id="request">{}</textarea>
+          <div class="sub">Fallback para cubrir toda la superficie de SliverRPC. (Unary + server-streaming)</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3 class="h">RPC Help / Documentation</h3>
+        <div id="rpcHelp" class="sub">Selecciona un método en el catálogo para ver guía, campos y ejemplo.</div>
+        <h3 class="h" style="margin-top:12px">Response</h3>
+        <pre id="response" class="output">{}</pre>
+      </section>
+    </div>
+
+    <section class="events">
+      <h3 class="h" style="margin-top:0">Live Event Stream</h3>
+      <pre id="events" class="output"></pre>
+    </section>
+  </main>
+</div>
+
+<script>
+let methods = [];
+let selectedMethod = "";
+let actions = [];
+let rpcDocs = [];
+let activeCategory = "All";
+
+const $ = (id) => document.getElementById(id);
+
+function setResponse(text){
+  try { $('response').textContent = JSON.stringify(JSON.parse(text), null, 2); }
+  catch { $('response').textContent = text; }
+}
+
+function setStatus(msg, state='muted'){
+  $('status').className = `status ${state}`;
+  $('status').textContent = msg;
+}
+
+async function postJSON(url, body){
+  const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const t = await r.text();
+  if(!r.ok) throw new Error(t);
+  return t;
+}
+
+async function invokeRPC(method, body='{}'){
+  setStatus(`Invoking ${method}...`, 'warn');
+  const res = await fetch('/api/invoke', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ method, body }) });
+  const text = await res.text();
+  setStatus(res.ok ? 'OK' : `ERROR ${res.status}`, res.ok ? 'ok' : 'warn');
+  setResponse(text);
+}
+
+async function runAction(action, params={}){
+  setStatus(`Action ${action}...`, 'warn');
+  try {
+    const text = await postJSON('/api/action', { action, params });
+    setStatus('OK', 'ok');
+    setResponse(text);
+  } catch (e) {
+    setStatus('ERROR', 'warn');
+    setResponse(String(e));
+  }
+}
+
+async function loadDashboard(){
+  const data = await (await fetch('/api/dashboard')).json();
+  const metrics = [
+    ['Sessions', (data.sessions?.sessions||[]).length],
+    ['Beacons', (data.beacons?.beacons||[]).length],
+    ['Jobs', (data.jobs?.active||[]).length],
+    ['Hosts', (data.hosts?.hosts||[]).length],
+    ['Loot', (data.loot?.loot||[]).length],
+    ['Creds', (data.creds?.credentials||[]).length],
+    ['Websites', (data.websites?.websites||[]).length],
+    ['Builders', (data.builders?.builders||[]).length],
+  ];
+  $('cards').innerHTML = metrics.map(([k,v]) => `<div class="card"><div class="k">${k}</div><div class="n">${v}</div></div>`).join('');
+}
+
+async function loadCatalog(){
+  methods = await (await fetch('/api/catalog')).json();
+  renderCatalog();
+}
+
+function renderCatalog(){
+  const q = $('search').value.toLowerCase();
+  const filtered = methods.filter(m => m.method.toLowerCase().includes(q) || m.category.toLowerCase().includes(q));
+  $('catalog').innerHTML = filtered.map(m => `<div class="method ${selectedMethod===m.method?'active':''}" data-m="${m.method}"><span class="muted">${m.category}</span><br/>${m.method}${(m.clientStreaming||m.serverStreaming)?' (stream)':''}</div>`).join('');
+  document.querySelectorAll('.method').forEach(el => el.onclick = () => { selectedMethod = el.dataset.m; $('selected').textContent = `RPC: ${selectedMethod}`; renderCatalog(); renderRpcHelp(selectedMethod); });
+}
+
+
+async function loadRpcDocs(){
+  rpcDocs = await (await fetch('/api/rpc-docs')).json();
+}
+
+function renderRpcHelp(method){
+  const d = rpcDocs.find(x => x.method === method);
+  if(!d){ $('rpcHelp').textContent = 'No hay documentación cargada para este método.'; return; }
+  $('rpcHelp').innerHTML = `
+    <div><strong>${d.method}</strong> <span class="badge">${d.category}</span></div>
+    <div class="sub">${d.summary}</div>
+    <div><strong>When to use:</strong> ${d.whenToUse}</div>
+    <div><strong>Input:</strong> ${d.inputMessage}</div>
+    <div><strong>Output:</strong> ${d.outputMessage}</div>
+    <div><strong>Streaming:</strong> ${d.streaming}</div>
+    <div><strong>Fields:</strong> ${(d.inputFields||[]).join(', ') || 'None'}</div>
+    <div><strong>Related playbooks:</strong> ${(d.relatedPlaybook||[]).join(', ') || 'N/A'}</div>
+    <div><strong>Example request:</strong><pre class="output">${d.exampleRequest || '{}'}</pre></div>
+    <div><strong>Tips:</strong> ${(d.tips||[]).join(' | ')}</div>
+  `;
+}
+
+async function loadActions(){
+  actions = await (await fetch('/api/action-catalog')).json();
+  renderActionFilters();
+  renderActions();
+}
+
+function renderActionFilters(){
+  const cats = ['All', ...Array.from(new Set(actions.map(a => a.category))).sort()];
+  $('filters').innerHTML = cats.map(c => `<button class="tab-btn ${activeCategory===c?'active':''}" data-c="${c}">${c}</button>`).join('');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => { activeCategory = btn.dataset.c; renderActionFilters(); renderActions(); });
+}
+
+function renderActions(){
+  const visible = actions.filter(a => activeCategory === 'All' || a.category === activeCategory);
+  $('actions').innerHTML = visible.map((a, i) => {
+    const inputs = Object.entries(a.params || {}).map(([k,v]) => `<input data-k="${k}" value="${v||''}" placeholder="${k}"/>`).join('');
+    return `<div class="action-card" data-idx="${i}" data-key="${a.key}">
+      <div class="action-head"><strong>${a.label}</strong><span class="badge">${a.category}</span></div>
+      <div class="sub">${a.description}</div>
+      <div class="form">${inputs || '<div class="muted">Sin parámetros</div>'}</div>
+      <button class="run">Run Playbook</button>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.action-card .run').forEach(btn => {
+    btn.onclick = async () => {
+      const card = btn.closest('.action-card');
+      const key = card.dataset.key;
+      const params = {};
+      card.querySelectorAll('input[data-k]').forEach(inp => params[inp.dataset.k] = inp.value);
+      $('selected').textContent = `Action: ${key}`;
+      await runAction(key, params);
+    };
+  });
+}
+
+
+
+function drawBeaconMap(data){
+  const svg = $('beaconMap');
+  svg.innerHTML = '';
+  const byId = Object.fromEntries((data.nodes||[]).map(n => [n.id, n]));
+  (data.edges||[]).forEach(([a,b]) => {
+    const na = byId[a], nb = byId[b];
+    if(!na || !nb) return;
+    const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1', na.x); l.setAttribute('y1', na.y);
+    l.setAttribute('x2', nb.x); l.setAttribute('y2', nb.y);
+    l.setAttribute('stroke', '#355da4'); l.setAttribute('stroke-width', '2');
+    svg.appendChild(l);
+  });
+
+  (data.nodes||[]).forEach(n => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor = 'pointer';
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', '16');
+    c.setAttribute('fill', n.status === 'online' ? '#2dc987' : '#f7b955');
+    c.setAttribute('stroke', '#0b0f1f'); c.setAttribute('stroke-width', '2');
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', n.x + 22); t.setAttribute('y', n.y + 4);
+    t.setAttribute('fill', '#dbe8ff'); t.setAttribute('font-size', '12');
+    t.textContent = `${n.label} (${n.host})`;
+    g.appendChild(c); g.appendChild(t);
+    g.onclick = () => openBeaconMenu(n);
+    svg.appendChild(g);
+  });
+}
+
+function openBeaconMenu(node){
+  $('beaconTitle').textContent = `Beacon: ${node.label}`;
+  $('beaconMeta').textContent = `Host: ${node.host} | Status: ${node.status} | Operator: ${node.operator}`;
+  $('beaconMenu').innerHTML = (node.menu||[]).map(m => `<button style="width:100%; margin:4px 0;" data-beacon-action="${m}" data-beacon-id="${node.id}">${m}</button>`).join('');
+  document.querySelectorAll('button[data-beacon-action]').forEach(btn => {
+    btn.onclick = async () => {
+      const act = btn.dataset.beaconAction;
+      const bid = btn.dataset.beaconId;
+      if(act === 'Tasks'){
+        selectedMethod = 'GetBeaconTasks';
+        $('selected').textContent = `RPC: GetBeaconTasks (${bid})`;
+        $('request').value = JSON.stringify({ id: bid }, null, 2);
+        return;
+      }
+      if(act === 'Loot'){ await runAction('loot.list', {}); return; }
+      if(act === 'Pivot' || act === 'Pivot Graph'){ await runAction('pivot.graph', {}); return; }
+      if(act === 'Interact'){ await runAction('beacons.list', {}); return; }
+      if(act === 'Kill'){
+        selectedMethod = 'RmBeacon';
+        $('selected').textContent = `RPC: RmBeacon (${bid})`;
+        $('request').value = JSON.stringify({ id: bid }, null, 2);
+      }
+    };
+  });
+}
+
+async function loadBeaconMap(){
+  try {
+    const data = await (await fetch('/api/beacon-map')).json();
+    drawBeaconMap(data);
+  } catch (e) {
+    $('beaconMeta').textContent = 'No se pudo cargar beacon map';
+  }
+}
+
+function startEvents(){
+  const es = new EventSource('/api/events');
+  es.onmessage = e => { $('events').textContent = `[${new Date().toISOString()}] ${e.data}\n` + $('events').textContent; };
+  es.onerror = () => { $('events').textContent = '[events] reconnecting...\n' + $('events').textContent; };
+}
+
+document.querySelectorAll('button[data-action]').forEach(btn => btn.onclick = () => {
+  $('selected').textContent = `Action: ${btn.dataset.action}`;
+  runAction(btn.dataset.action, {});
+});
+$('search').addEventListener('input', renderCatalog);
+$('invoke').onclick = async () => {
+  if(!selectedMethod){ alert('Selecciona un método del catálogo'); return; }
+  await invokeRPC(selectedMethod, $('request').value);
+};
+
+loadCatalog();
+loadRpcDocs();
+loadActions();
+loadDashboard();
+loadBeaconMap();
+setInterval(loadDashboard, 10000);
+setInterval(loadBeaconMap, 15000);
+startEvents();
+</script>
+</body>
+</html>
