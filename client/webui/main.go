@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"reflect"
 	"sort"
@@ -83,6 +84,22 @@ type actionTemplate struct {
 	Params      map[string]string `json:"params"`
 }
 
+type beaconMapNode struct {
+	ID       string   `json:"id"`
+	Label    string   `json:"label"`
+	Host     string   `json:"host"`
+	Status   string   `json:"status"`
+	X        float64  `json:"x"`
+	Y        float64  `json:"y"`
+	Menu     []string `json:"menu"`
+	Operator string   `json:"operator"`
+}
+
+type beaconMapResponse struct {
+	Nodes []beaconMapNode `json:"nodes"`
+	Edges [][2]string     `json:"edges"`
+}
+
 var actionTemplates = []actionTemplate{
 	{Key: "listener.mtls.start", Label: "Start mTLS Listener", Description: "Levanta listener mTLS para sesiones/beacons.", Category: "Infrastructure", Params: map[string]string{"name": "team-mtls", "host": "0.0.0.0", "port": "8888"}},
 	{Key: "listener.http.start", Label: "Start HTTP Listener", Description: "Levanta listener HTTP.", Category: "Infrastructure", Params: map[string]string{"name": "team-http", "host": "0.0.0.0", "port": "80"}},
@@ -135,6 +152,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/rpc-docs", s.rpcDocs)
 	mux.HandleFunc("/api/action-catalog", s.actionCatalog)
 	mux.HandleFunc("/api/dashboard", s.dashboard)
+	mux.HandleFunc("/api/beacon-map", s.beaconMap)
 	mux.HandleFunc("/api/invoke", s.invoke)
 	mux.HandleFunc("/api/action", s.action)
 	mux.HandleFunc("/api/events", s.events)
@@ -221,6 +239,57 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		out["errors"] = errs
 	}
 	writeJSON(w, out)
+}
+
+func (s *server) beaconMap(w http.ResponseWriter, r *http.Request) {
+	if s.demo {
+		writeJSON(w, beaconMapResponse{Nodes: []beaconMapNode{
+			{ID: "b-1", Label: "Beacon-Alpha", Host: "wkstn-01", Status: "online", X: 120, Y: 80, Operator: "sales", Menu: []string{"Interact", "Tasks", "Pivot", "Screenshot", "Kill"}},
+			{ID: "b-2", Label: "Beacon-Bravo", Host: "srv-finance", Status: "online", X: 320, Y: 160, Operator: "sales", Menu: []string{"Interact", "Tasks", "Loot", "Creds", "Kill"}},
+			{ID: "b-3", Label: "Beacon-Charlie", Host: "dc-01", Status: "sleep", X: 500, Y: 70, Operator: "sales", Menu: []string{"Interact", "Tasks", "Pivot Graph", "Kill"}},
+		}, Edges: [][2]string{{"b-1", "b-2"}, {"b-2", "b-3"}}})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	raw, err := s.invokeRPC(ctx, "GetBeacons", `{}`)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		http.Error(w, fmt.Sprintf("cannot parse beacons payload: %v", err), http.StatusBadGateway)
+		return
+	}
+	arr, _ := parsed["beacons"].([]any)
+	nodes := make([]beaconMapNode, 0, len(arr))
+	radius, cx, cy := 220.0, 320.0, 200.0
+	for i, item := range arr {
+		m, _ := item.(map[string]any)
+		id := asString(m["id"], fmt.Sprintf("beacon-%d", i+1))
+		host := asString(m["hostname"], "unknown")
+		label := asString(m["name"], id)
+		angle := (2 * math.Pi * float64(i)) / math.Max(float64(len(arr)), 1)
+		nodes = append(nodes, beaconMapNode{
+			ID:       id,
+			Label:    label,
+			Host:     host,
+			Status:   "online",
+			X:        cx + radius*math.Cos(angle),
+			Y:        cy + radius*math.Sin(angle),
+			Operator: asString(m["username"], "operator"),
+			Menu:     []string{"Interact", "Tasks", "Pivot", "Loot", "Kill"},
+		})
+	}
+
+	edges := make([][2]string, 0)
+	for i := 1; i < len(nodes); i++ {
+		edges = append(edges, [2]string{nodes[i-1].ID, nodes[i].ID})
+	}
+	writeJSON(w, beaconMapResponse{Nodes: nodes, Edges: edges})
 }
 
 func (s *server) catalog(w http.ResponseWriter, _ *http.Request) {
@@ -491,6 +560,13 @@ func category(method string) string {
 func writeJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func asString(v any, fallback string) string {
+	if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+		return s
+	}
+	return fallback
 }
 
 func relatedActionsByMethod() map[string][]string {

@@ -147,3 +147,23 @@ func TestRPCDocsContainsGetSessions(t *testing.T) {
 		t.Fatalf("GetSessions docs not found")
 	}
 }
+
+func TestBeaconMapDemo(t *testing.T) {
+	s := &server{demo: true}
+	r := httptest.NewRequest(http.MethodGet, "/api/beacon-map", nil)
+	w := httptest.NewRecorder()
+	s.beaconMap(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
+	}
+	var out beaconMapResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Nodes) == 0 {
+		t.Fatalf("expected nodes in beacon map")
+	}
+	if len(out.Nodes[0].Menu) == 0 {
+		t.Fatalf("expected context menu options in beacon map node")
+	}
+}

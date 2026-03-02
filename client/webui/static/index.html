@@ -141,6 +141,19 @@
 
     <div id="cards" class="cards"></div>
 
+    <section class="panel" style="margin:12px 14px 0;">
+      <h3 class="h">Beacon Map</h3>
+      <div class="sub">Mapa interactivo de beacons (estilo grafo). Click en un beacon para abrir menú.</div>
+      <div style="display:grid; grid-template-columns: 1fr 280px; gap:10px;">
+        <svg id="beaconMap" viewBox="0 0 760 360" style="width:100%; height:360px; background:#0b142c; border:1px solid #2a4378; border-radius:10px;"></svg>
+        <div class="panel" style="padding:8px;">
+          <strong id="beaconTitle">Beacon Menu</strong>
+          <div id="beaconMeta" class="sub">Selecciona un nodo del mapa.</div>
+          <div id="beaconMenu"></div>
+        </div>
+      </div>
+    </section>
+
     <div class="workspace">
       <section class="panel">
         <h3 class="h">Guided Playbooks</h3>
@@ -301,6 +314,74 @@ function renderActions(){
   });
 }
 
+
+
+function drawBeaconMap(data){
+  const svg = $('beaconMap');
+  svg.innerHTML = '';
+  const byId = Object.fromEntries((data.nodes||[]).map(n => [n.id, n]));
+  (data.edges||[]).forEach(([a,b]) => {
+    const na = byId[a], nb = byId[b];
+    if(!na || !nb) return;
+    const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1', na.x); l.setAttribute('y1', na.y);
+    l.setAttribute('x2', nb.x); l.setAttribute('y2', nb.y);
+    l.setAttribute('stroke', '#355da4'); l.setAttribute('stroke-width', '2');
+    svg.appendChild(l);
+  });
+
+  (data.nodes||[]).forEach(n => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor = 'pointer';
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', '16');
+    c.setAttribute('fill', n.status === 'online' ? '#2dc987' : '#f7b955');
+    c.setAttribute('stroke', '#0b0f1f'); c.setAttribute('stroke-width', '2');
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', n.x + 22); t.setAttribute('y', n.y + 4);
+    t.setAttribute('fill', '#dbe8ff'); t.setAttribute('font-size', '12');
+    t.textContent = `${n.label} (${n.host})`;
+    g.appendChild(c); g.appendChild(t);
+    g.onclick = () => openBeaconMenu(n);
+    svg.appendChild(g);
+  });
+}
+
+function openBeaconMenu(node){
+  $('beaconTitle').textContent = `Beacon: ${node.label}`;
+  $('beaconMeta').textContent = `Host: ${node.host} | Status: ${node.status} | Operator: ${node.operator}`;
+  $('beaconMenu').innerHTML = (node.menu||[]).map(m => `<button style="width:100%; margin:4px 0;" data-beacon-action="${m}" data-beacon-id="${node.id}">${m}</button>`).join('');
+  document.querySelectorAll('button[data-beacon-action]').forEach(btn => {
+    btn.onclick = async () => {
+      const act = btn.dataset.beaconAction;
+      const bid = btn.dataset.beaconId;
+      if(act === 'Tasks'){
+        selectedMethod = 'GetBeaconTasks';
+        $('selected').textContent = `RPC: GetBeaconTasks (${bid})`;
+        $('request').value = JSON.stringify({ id: bid }, null, 2);
+        return;
+      }
+      if(act === 'Loot'){ await runAction('loot.list', {}); return; }
+      if(act === 'Pivot' || act === 'Pivot Graph'){ await runAction('pivot.graph', {}); return; }
+      if(act === 'Interact'){ await runAction('beacons.list', {}); return; }
+      if(act === 'Kill'){
+        selectedMethod = 'RmBeacon';
+        $('selected').textContent = `RPC: RmBeacon (${bid})`;
+        $('request').value = JSON.stringify({ id: bid }, null, 2);
+      }
+    };
+  });
+}
+
+async function loadBeaconMap(){
+  try {
+    const data = await (await fetch('/api/beacon-map')).json();
+    drawBeaconMap(data);
+  } catch (e) {
+    $('beaconMeta').textContent = 'No se pudo cargar beacon map';
+  }
+}
+
 function startEvents(){
   const es = new EventSource('/api/events');
   es.onmessage = e => { $('events').textContent = `[${new Date().toISOString()}] ${e.data}\n` + $('events').textContent; };
@@ -321,7 +402,9 @@ loadCatalog();
 loadRpcDocs();
 loadActions();
 loadDashboard();
+loadBeaconMap();
 setInterval(loadDashboard, 10000);
+setInterval(loadBeaconMap, 15000);
 startEvents();
 </script>
 </body>

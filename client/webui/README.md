@@ -28,6 +28,7 @@ go run ./client/webui -demo -listen 127.0.0.1:18080
   - extensibilidad (builders, extensions)
 - Invocación RPC genérica (`/api/invoke`) para cubrir toda la superficie.
 - Help/documentación extensiva por RPC en `/api/rpc-docs` con: propósito, cuándo usar, campos de entrada, ejemplo JSON, tips y playbooks relacionados.
+- Beacon map interactivo (`/api/beacon-map`) estilo grafo con menú contextual clickable por nodo.
 - Eventos en tiempo real (`/api/events`) vía SSE.
 
 ## Nota de alcance
