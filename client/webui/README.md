@@ -16,6 +16,24 @@ Modo UI sin backend:
 go run ./client/webui -demo -listen 127.0.0.1:18080
 ```
 
+## Bootstrap automático (instala/levanta server + frontend)
+
+```bash
+./client/webui/bootstrap-sliver-webui.sh
+```
+
+El script:
+- compila Sliver si no encuentra `sliver-server`/`sliver-client`,
+- compila `sliver-webui`,
+- levanta `sliver-server daemon`,
+- intenta generar config de operador en `~/.sliver-webui/webui_operator.cfg`,
+- levanta el frontend en modo conectado (o `-demo` si no pudo generar config).
+
+Variables útiles:
+- `LHOST` (default `127.0.0.1`)
+- `WEBUI_LISTEN` (default `127.0.0.1:18080`)
+- `OPERATOR_NAME` (default `webui`)
+
 ## Capacidades incluidas
 
 - Catálogo completo de métodos `rpcpb.SliverRPC` (descubierto por reflection).
